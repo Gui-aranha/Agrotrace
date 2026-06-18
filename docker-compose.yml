@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: agrotrace_postgres
+    environment:
+      POSTGRES_DB: agrotrace
+      POSTGRES_USER: agro_user
+      POSTGRES_PASSWORD: agro_pass
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/esquema.sql:/docker-entrypoint-initdb.d/01_esquema.sql
+      - ./db/insercoes.sql:/docker-entrypoint-initdb.d/02_insercoes.sql
+
+  app:
+    build: .
+    container_name: agrotrace_app
+    depends_on:
+      - postgres
+    stdin_open: true
+    tty: true
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: agrotrace
+      DB_USER: agro_user
+      DB_PASSWORD: agro_pass
+
+volumes:
+  postgres_data:
