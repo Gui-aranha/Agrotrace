@@ -19,4 +19,3 @@ docker compose run --rm app
 ```bash
 docker exec -it agrotrace_postgres psql -U agro_user -d agrotrace
 ```
-testado
