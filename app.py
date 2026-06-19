@@ -17,7 +17,8 @@ def listar_propriedades():
     conexao = conectar()
     cursor = conexao.cursor()
 
-    cursor.execute("""
+    cursor.execute( # ao não usar f-strings já se protege de SQL injection
+        """
         SELECT id_propriedade, nome, localizacao, area_total
         FROM propriedade
         ORDER BY id_propriedade;
@@ -43,7 +44,7 @@ def cadastrar_propriedade():
 
     try:
         area_total = float(input("Área total: "))
-    except ValueError:
+    except ValueError: # caso não passe no check e cause um erro
         print("Área inválida. Digite um número.")
         return
 
@@ -51,7 +52,7 @@ def cadastrar_propriedade():
     cursor = conexao.cursor()
 
     try:
-        cursor.execute(
+        cursor.execute( # ao não usar f-strings já se protege de SQL injection
             """
             INSERT INTO propriedade (nome, localizacao, area_total)
             VALUES (%s, %s, %s);
@@ -59,11 +60,11 @@ def cadastrar_propriedade():
             (nome, localizacao, area_total),
         )
 
-        conexao.commit()
+        conexao.commit() 
         print("Propriedade cadastrada com sucesso!")
 
     except Exception as erro:
-        conexao.rollback()
+        conexao.rollback() # transação é desfeita se interrompida no meio
         print("Erro ao cadastrar propriedade:")
         print(erro)
 
