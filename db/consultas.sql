@@ -14,7 +14,7 @@ FROM propriedade
 ORDER BY nome;
 -- ------------------------------------------------------------------------------
 -- CONSULTA 1: Relatório detalhado das propriedades
--- Justificativa: Fornece uma visão gerencial combinando o tamanho da propriedade, 
+-- Justificativa: Fornece uma visão geral combinando o tamanho da propriedade, 
 -- quantidade de talhões, todos os tipos de grãos já plantados e insumos químicos 
 -- aplicados
 -- ------------------------------------------------------------------------------
@@ -115,7 +115,8 @@ ORDER BY s.nro_serie;
 
 -- ------------------------------------------------------------------------------
 -- CONSULTA 3: Nota fiscal / relatório de transação
--- Justificativa: É o motivo do banco de dados colher
+-- Justificativa: Realizar a rastreabilidade da comercialização dos produtos para
+-- a confecção de notas fiscais. É a razão do banco de dados colher
 -- as informações do cliente. Mostra quem comprou, quando comprou,
 -- qual lote foi vendido, preço do produto, quantidade comprada,
 -- valor total e de qual propriedade/talhão veio a produção.
@@ -149,7 +150,8 @@ ORDER BY tr.data_compra DESC, c.nome;
 -- ------------------------------------------------------------------------------
 -- CONSULTA 4: Operações com duração acima da média
 -- Justificativa: Lista operações concluídas cuja duração ficou acima da 
---  média das operações concluídas registradas no sistema.
+--  média das operações concluídas registradas no sistema. auxiliando análises de 
+-- eficiência operacional.
 -- ------------------------------------------------------------------------------
 SELECT
     o.id_operacao,
@@ -183,7 +185,8 @@ ORDER BY duracao_horas DESC;
 
 -- ------------------------------------------------------------------------------
 -- CONSULTA 5: Fornecedores com todos os grãos (DIVISÃO RELACIONAL)
--- Fornecedores que têm lote de todos os grãos cadastrados
+-- Justificativa: Identificar fornecedores que possuem todos os tipos de grãos do
+-- sistema para venda, é feito a partir dos lotes cadastrados.
 -- ------------------------------------------------------------------------------
 
 SELECT f.cnpj, f.nome

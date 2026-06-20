@@ -4,6 +4,7 @@ import psycopg2
 
 
 def conectar():
+    # usa a biblioteca psycorpg2 para conectar com o banco de dados via docker
     return psycopg2.connect(
         host=os.getenv("DB_HOST", "localhost"),
         port=os.getenv("DB_PORT", "5432"),
@@ -395,15 +396,18 @@ def todos_graos():
 
 
 def cadastrar_propriedade():
+    # recolhe os inputs do usuário
     nome = input("Nome da propriedade: ")
     localizacao = input("Localização: ")
 
+    # usa try/except para tratar erros e não deixar SQLinjection
     try:
         area_total = float(input("Área total: "))
     except ValueError: # caso não passe no check e cause um erro
         print("Área inválida. Digite um número.")
         return
 
+    # conecta ao banco
     conexao = conectar()
     cursor = conexao.cursor()
 
@@ -416,7 +420,9 @@ def cadastrar_propriedade():
         """,
             (nome, localizacao, area_total),
         )
+        # insere no banco o nome, localização e área total
 
+        # se deu tudo certo da commit
         conexao.commit() 
         print("Propriedade cadastrada com sucesso!")
 
@@ -425,20 +431,25 @@ def cadastrar_propriedade():
         print("Erro ao cadastrar propriedade:")
         print(erro)
 
+    # desconecta do banco
     cursor.close()
     conexao.close()
 
 
 def consultar_por_area():
+    # usa try/except para tratar erros e não deixar SQLinjection
     try:
         area_minima = float(input("Área mínima: "))
     except ValueError:
         print("Área inválida. Digite um número.")
         return
 
+    # conecta ao banco
     conexao = conectar()
     cursor = conexao.cursor()
 
+    # ao não usar f-strings já se protege de SQL injection
+    # seleciona nome, localização e área total com um WHERE restrição
     cursor.execute(
         """
         SELECT nome, localizacao, area_total
@@ -449,6 +460,7 @@ def consultar_por_area():
         (area_minima,),
     )
 
+    # transforma em uma lista para conseguirmos mostrar
     resultados = cursor.fetchall()
 
     print(f"\n=== Propriedades com área >= {area_minima} ===")
@@ -459,12 +471,14 @@ def consultar_por_area():
         for nome, localizacao, area_total in resultados:
             print(f"{nome} | {localizacao} | {area_total} ha")
 
+    # fecha o banco de dados
     cursor.close()
     conexao.close()
 
 
 def menu():
     while True:
+        # menu simples
         print("\n=== AgroTrace Mini ===")
         print("1 - Cadastrar propriedade")
         print("2 - Consultar por área mínima")
