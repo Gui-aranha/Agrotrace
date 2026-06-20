@@ -1,4 +1,4 @@
--- insercoes.sql
+-- dados.sql
 -- Projeto AgroTrace
 -- Dados iniciais de teste
 -- 3 tuplas por tabela, seguindo a ordem das chaves estrangeiras.
@@ -131,7 +131,8 @@ INSERT INTO lote_graos (
 ) VALUES
     (1, '11222333000144', 'Soja', 'LGS-2026-001', '2026-12-31', 1000.00),
     (2, '11222333000144', 'Milho', 'LGM-2026-001', '2026-11-30', 850.00),
-    (3, '33444555000166', 'Trigo', 'LGT-2026-001', '2026-10-31', 700.00);
+    (3, '11222333000144', 'Trigo', 'LGT-2026-001', '2026-10-15', 500.00),
+    (4, '33444555000166', 'Trigo', 'LGT-2026-002', '2026-10-31', 700.00);
 
 INSERT INTO utiliza_graos (id_operacao_plantio, id_lote_grao, quantidade_por_hectare) VALUES
     (1, 1, 60.00),
