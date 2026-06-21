@@ -10,11 +10,14 @@
 -- aplicados
 -- ------------------------------------------------------------------------------
 WITH area_talhoes AS (
+    -- Agrupa os talhões por propriedade para calcular:
+    --   1) quantidade de talhões cadastrados
+    --   2) soma da área ocupada pelos talhões
     SELECT
-        t.propriedade_nome,
-        t.propriedade_localizacao,
-        COUNT(*) AS qtd_talhoes,
-        SUM(t.area) AS area_total_talhoes
+        t.propriedade_nome,           -- nome da propriedade associada ao talhão
+        t.propriedade_localizacao,    -- localização da propriedade associada ao talhão
+        COUNT(*) AS qtd_talhoes,      -- conta quantos talhões existem naquela propriedade
+        SUM(t.area) AS area_total_talhoes -- soma a área de todos os talhões da propriedade
     FROM talhao t
     GROUP BY
         t.propriedade_nome,
@@ -22,59 +25,75 @@ WITH area_talhoes AS (
 ),
 
 graos_plantados AS (
+    -- Relaciona operações de plantio com os lotes de grãos utilizados.
+    -- O objetivo é listar, por propriedade, todos os tipos de grãos já plantados.
     SELECT
-        o.propriedade_nome,
-        o.propriedade_localizacao,
+        o.propriedade_nome,           -- propriedade onde a operação ocorreu
+        o.propriedade_localizacao,    -- localização da propriedade
         STRING_AGG(DISTINCT lg.nome_grao, ', ') AS graos_plantados
+        -- STRING_AGG junta os nomes dos grãos em uma única string
+        -- DISTINCT evita repetir o mesmo grão várias vezes
     FROM operacao o
     JOIN utiliza_graos ug
         ON ug.id_operacao_plantio = o.id_operacao
+        -- liga a operação ao uso de grãos nessa operação
     JOIN lote_graos lg
         ON lg.id_lote_grao = ug.id_lote_grao
+        -- liga o uso do grão ao lote específico do grão
     GROUP BY
         o.propriedade_nome,
         o.propriedade_localizacao
 ),
 
 insumos_aplicados AS (
+    -- Relaciona operações com os lotes de insumos aplicados.
+    -- O objetivo é listar, por propriedade, todos os insumos já utilizados.
     SELECT
-        o.propriedade_nome,
-        o.propriedade_localizacao,
+        o.propriedade_nome,           -- propriedade onde a operação ocorreu
+        o.propriedade_localizacao,    -- localização da propriedade
         STRING_AGG(DISTINCT li.nome_insumo, ', ') AS insumos_aplicados
+        -- STRING_AGG concatena os nomes dos insumos
+        -- DISTINCT evita duplicação do mesmo insumo na saída
     FROM operacao o
     JOIN aplica_insumo ai
         ON ai.id_operacao = o.id_operacao
+        -- liga a operação ao lote de insumo aplicado
     JOIN lote_insumo li
         ON li.id_lote_insumo = ai.id_lote_insumo
+        -- recupera o nome do insumo a partir do lote
     GROUP BY
         o.propriedade_nome,
         o.propriedade_localizacao
 )
 
 SELECT
-    p.nome,
-    p.localizacao,
-    p.area_total,
+    p.nome,                       -- nome da propriedade
+    p.localizacao,                -- localização da propriedade
+    p.area_total,                 -- área total cadastrada
     COALESCE(a.qtd_talhoes, 0) AS qtd_talhoes,
+    -- COALESCE troca NULL por 0 quando a propriedade não tem talhões cadastrados
     COALESCE(a.area_total_talhoes, 0) AS area_total_talhoes,
+    -- idem para a soma das áreas dos talhões
     COALESCE(g.graos_plantados, 'Nenhum') AS graos_plantados,
+    -- se não houver grãos plantados, mostra "Nenhum"
     COALESCE(i.insumos_aplicados, 'Nenhum') AS insumos_aplicados
-
+    -- se não houver insumos aplicados, mostra "Nenhum"
 FROM propriedade p
-
 LEFT JOIN area_talhoes a
     ON a.propriedade_nome = p.nome
    AND a.propriedade_localizacao = p.localizacao
-
+   -- LEFT JOIN mantém todas as propriedades,
+   -- mesmo aquelas sem talhões cadastrados
 LEFT JOIN graos_plantados g
     ON g.propriedade_nome = p.nome
    AND g.propriedade_localizacao = p.localizacao
-
+   -- LEFT JOIN preserva a propriedade mesmo sem plantio registrado
 LEFT JOIN insumos_aplicados i
     ON i.propriedade_nome = p.nome
    AND i.propriedade_localizacao = p.localizacao
-
+   -- LEFT JOIN preserva a propriedade mesmo sem insumo aplicado
 ORDER BY p.nome;
+-- ordena a saída por nome da propriedade
 
 
 -- ------------------------------------------------------------------------------
@@ -83,16 +102,20 @@ ORDER BY p.nome;
 -- para cada sensor a medição mais recente
 -- ------------------------------------------------------------------------------
 SELECT
-    s.nro_serie,
-    s.nome,
-    s.tipo_medicao,
-    lm.data_hora,
-    lm.valor
+    s.nro_serie,                  -- identificador do sensor
+    s.nome,                       -- nome amigável do sensor
+    s.tipo_medicao,               -- tipo de medição realizada pelo sensor
+    lm.data_hora,                 -- data/hora da última medição
+    lm.valor                      -- valor mais recente lido
 FROM sensor s
 LEFT JOIN (
+    -- Subconsulta derivada:
+    -- primeiro encontra, para cada sensor, a maior data_hora registrada
+    -- depois junta com a tabela medicao para recuperar o valor correspondente
     SELECT m1.nro_serie, m1.data_hora, m1.valor
     FROM medicao m1
     JOIN (
+        -- Esta subconsulta calcula a última data de medição por sensor
         SELECT nro_serie, MAX(data_hora) AS max_data
         FROM medicao
         GROUP BY nro_serie
@@ -101,7 +124,9 @@ LEFT JOIN (
      AND ult.max_data = m1.data_hora
 ) lm
   ON lm.nro_serie = s.nro_serie
+  -- LEFT JOIN mantém sensores mesmo que ainda não tenham medição cadastrada
 ORDER BY s.nro_serie;
+-- ordena os sensores pelo número de série
 
 
 -- ------------------------------------------------------------------------------
@@ -113,30 +138,36 @@ ORDER BY s.nro_serie;
 -- valor total e de qual propriedade/talhão veio a produção.
 -- ------------------------------------------------------------------------------
 SELECT
-    tr.id_operacao                           AS id_nota,
+    tr.id_operacao AS id_nota,    -- usa o id da operação como identificador da nota
     TO_CHAR(tr.data_compra, 'DD/MM/YYYY HH24:MI') AS data_compra,
-    c.cnpj                                   AS cnpj_consumidor,
-    c.nome                                   AS nome_consumidor,
-    c.email1                                 AS email_consumidor,
-    c.telefone1                              AS telefone_consumidor,
-    p.lote_produto,
-    p.preco                                  AS preco_unitario,
-    tr.quantidade_comprada,
-    tr.valor_compra                          AS valor_total,
-    o.propriedade_nome,
-    o.propriedade_localizacao,
-    o.nro_talhao
+    -- formata a data/hora da compra para leitura humana
+    c.cnpj AS cnpj_consumidor,    -- CNPJ do consumidor
+    c.nome AS nome_consumidor,    -- nome do consumidor
+    c.email1 AS email_consumidor, -- primeiro e-mail cadastrado
+    c.telefone1 AS telefone_consumidor, -- primeiro telefone cadastrado
+    p.lote_produto,               -- lote do produto vendido
+    p.preco AS preco_unitario,    -- preço unitário cadastrado
+    tr.quantidade_comprada,       -- quantidade comprada na transação
+    tr.valor_compra AS valor_total, -- valor total da compra
+    o.propriedade_nome,           -- origem: nome da propriedade
+    o.propriedade_localizacao,    -- origem: localização da propriedade
+    o.nro_talhao                  -- origem: talhão
 FROM transacao tr
 JOIN consumidor c
   ON c.cnpj = tr.cnpj_consumidor
+  -- liga a transação ao consumidor que comprou
 JOIN produto p
   ON p.id_operacao = tr.id_operacao
  AND p.lote_produto = tr.lote_produto
+  -- liga a transação ao produto específico vendido
 JOIN colheita co
   ON co.id_operacao = p.id_operacao
+  -- recupera a etapa de colheita ligada ao produto
 JOIN operacao o
   ON o.id_operacao = co.id_operacao
+  -- recupera a operação agrícola de origem
 ORDER BY tr.data_compra DESC, c.nome;
+-- transações mais recentes primeiro
 
 -- ------------------------------------------------------------------------------
 -- CONSULTA 4: Operações com duração acima da média
@@ -145,34 +176,48 @@ ORDER BY tr.data_compra DESC, c.nome;
 -- eficiência operacional.
 -- ------------------------------------------------------------------------------
 SELECT
-    o.id_operacao,
-    o.data_hora_inicio,
-    o.data_hora_fim,
-    op.nome AS operador,
-    m.nome AS maquina,
-    p.nome AS propriedade,
-    p.localizacao,
-    t.nro_talhao,
-    ROUND(EXTRACT(EPOCH FROM (o.data_hora_fim - o.data_hora_inicio)) / 3600.0, 2) AS duracao_horas
+    o.id_operacao,                -- identificador da operação
+    o.data_hora_inicio,           -- início da operação
+    o.data_hora_fim,              -- fim da operação
+    op.nome AS operador,          -- nome do operador responsável
+    m.nome AS maquina,            -- nome da máquina utilizada
+    p.nome AS propriedade,       -- nome da propriedade onde ocorreu
+    p.localizacao,               -- localização da propriedade
+    t.nro_talhao,                -- talhão envolvido
+    ROUND(
+        EXTRACT(EPOCH FROM (o.data_hora_fim - o.data_hora_inicio)) / 3600.0,
+        2
+    ) AS duracao_horas
+    -- EXTRACT(EPOCH ...) converte a diferença entre timestamps em segundos
+    -- dividindo por 3600, obtemos horas
+    -- ROUND deixa o resultado mais legível
 FROM operacao o
 JOIN operador op
   ON op.cpf = o.cpf_operador
+  -- liga a operação ao operador que a executou
 JOIN maquina m
   ON m.nro_serie = o.nro_serie_maquina
+  -- liga a operação à máquina utilizada
 JOIN talhao t
   ON t.propriedade_nome = o.propriedade_nome
  AND t.propriedade_localizacao = o.propriedade_localizacao
  AND t.nro_talhao = o.nro_talhao
+  -- recupera o talhão da operação
 JOIN propriedade p
   ON p.nome = t.propriedade_nome
  AND p.localizacao = t.propriedade_localizacao
+  -- recupera os dados da propriedade
 WHERE o.data_hora_fim IS NOT NULL
+  -- considera apenas operações concluídas
   AND EXTRACT(EPOCH FROM (o.data_hora_fim - o.data_hora_inicio)) > (
+      -- subconsulta não correlacionada:
+      -- calcula a média geral de duração de operações concluídas
       SELECT AVG(EXTRACT(EPOCH FROM (o2.data_hora_fim - o2.data_hora_inicio)))
       FROM operacao o2
       WHERE o2.data_hora_fim IS NOT NULL
   )
 ORDER BY duracao_horas DESC;
+-- maior duração primeiro
 
 -- ------------------------------------------------------------------------------
 -- CONSULTA 5: Fornecedores com todos os grãos (DIVISÃO RELACIONAL)
@@ -183,9 +228,14 @@ ORDER BY duracao_horas DESC;
 SELECT f.cnpj, f.nome
 FROM fornecedor f
 WHERE NOT EXISTS (
+    -- Para este fornecedor, verificamos se existe algum grão
+    -- para o qual NÃO exista um lote correspondente
     SELECT 1
     FROM grao g
     WHERE NOT EXISTS (
+        -- Subconsulta correlacionada:
+        -- procura um lote do fornecedor atual (f.cnpj)
+        -- para o grão atual (g.nome)
         SELECT 1
         FROM lote_graos lg
         WHERE lg.cnpj_fornecedor = f.cnpj
@@ -193,3 +243,4 @@ WHERE NOT EXISTS (
     )
 )
 ORDER BY f.nome;
+-- ordena os fornecedores por nome

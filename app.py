@@ -4,7 +4,16 @@ import psycopg2
 
 
 def conectar():
-    # usa a biblioteca psycorpg2 para conectar com o banco de dados via docker
+    """
+    Cria e retorna uma conexão com o banco de dados PostgreSQL do AgroTrace.
+
+    Os parâmetros de conexão são lidos a partir de variáveis de ambiente,
+    permitindo que a aplicação funcione tanto dentro dos contêineres Docker
+    quanto em execuções locais. Caso alguma variável não esteja definida,
+    são usados valores padrão compatíveis com o ambiente do projeto.
+    """
+
+    # Usa a biblioteca psycopg2 para conectar a aplicação Python ao PostgreSQL.
     return psycopg2.connect(
         host=os.getenv("DB_HOST", "localhost"),
         port=os.getenv("DB_PORT", "5432"),
@@ -14,34 +23,66 @@ def conectar():
     )
 
 
-
 def listar_propriedades():
     """
-    Consulta 0 no consultas.sql
+    Lista todas as propriedades rurais cadastradas na base de dados.
+
+    A função executa uma consulta simples sobre a tabela propriedade,
+    retornando o nome e a localização de cada propriedade cadastrada.
+    Como não há entrada do usuário nessa consulta, não há parâmetros externos
+    a serem tratados no comando SQL.
+
+    Essa funcionalidade serve como uma consulta auxiliar para que o usuário
+    visualize rapidamente quais propriedades existem no sistema.
     """
-    conexao = conectar()
-    cursor = conexao.cursor()
 
-    # ao não usar f-strings já se protege de SQL injection
-    cursor.execute(
+    # Inicialização das variáveis de conexão e cursor.
+    # Elas começam como None para permitir fechamento seguro no bloco finally.
+    conexao = None
+    cursor = None
+
+    try:
+        # Abre conexão com o banco de dados.
+        conexao = conectar()
+
+        # Cria o cursor usado para executar comandos SQL.
+        cursor = conexao.cursor()
+
+        # Executa uma consulta simples, sem entrada externa do usuário.
+        cursor.execute(
+            """
+            SELECT nome, localizacao
+            FROM propriedade
+            ORDER BY nome;
         """
-        SELECT nome, localizacao
-        FROM propriedade
-        ORDER BY nome;
-    """)
+        )
 
-    propriedades = cursor.fetchall()
+        # Recupera todos os resultados retornados pela consulta.
+        propriedades = cursor.fetchall()
 
-    print("\n=== Propriedades cadastradas ===")
+        print("\n=== Propriedades cadastradas ===")
 
-    if not propriedades:
-        print("Nenhuma propriedade encontrada.")
-    else:
-        for nome, localizacao in propriedades:
-            print(f"{nome} | {localizacao}")
+        # Caso nenhuma propriedade seja encontrada, informa o usuário.
+        if not propriedades:
+            print("Nenhuma propriedade encontrada.")
+        else:
+            # Exibe as propriedades cadastradas em formato resumido.
+            for nome, localizacao in propriedades:
+                print(f"{nome} | {localizacao}")
 
-    cursor.close()
-    conexao.close()
+    except Exception as erro:
+        # Em caso de erro, exibe uma mensagem amigável sem encerrar o programa.
+        print("Erro ao listar propriedades.")
+        print(erro)
+
+    finally:
+        # Fecha o cursor, se ele tiver sido criado.
+        if cursor:
+            cursor.close()
+
+        # Fecha a conexão com o banco, se ela tiver sido aberta.
+        if conexao:
+            conexao.close()
 
 
 def consultar_relatorio_propriedade():
@@ -231,12 +272,31 @@ def consultar_relatorio_propriedade():
 
 def consultar_ultima_medicao_sensores():
     """
-    Consulta 2 no consultas.sql
+    Consulta a última medição registrada para cada sensor cadastrado no sistema.
+
+    A função executa a Consulta 2 do arquivo consultas.sql. O objetivo é apresentar
+    um painel de telemetria com todos os sensores cadastrados, mostrando a medição
+    mais recente de cada um quando ela existir.
+
+    A consulta utiliza uma subconsulta agregada para encontrar a maior data/hora de
+    medição de cada sensor. Em seguida, usa LEFT JOIN para manter sensores sem
+    histórico de medições no resultado, identificando-os como sensores sem leitura.
     """
-    conexao = conectar()
-    cursor = conexao.cursor()
+
+    # Inicialização das variáveis de conexão e cursor.
+    conexao = None
+    cursor = None
 
     try:
+        # Abre conexão com o banco de dados.
+        conexao = conectar()
+
+        # Cria o cursor usado para executar comandos SQL.
+        cursor = conexao.cursor()
+
+        # Executa a consulta da última medição de cada sensor.
+        # A subconsulta "ult" encontra a data/hora mais recente por sensor.
+        # O LEFT JOIN garante que sensores sem medições também sejam exibidos.
         cursor.execute(
             """
             SELECT
@@ -262,113 +322,187 @@ def consultar_ultima_medicao_sensores():
             """
         )
 
+        # Recupera todos os resultados retornados pela consulta.
         resultados = cursor.fetchall()
 
-        print("\n" + "="*80)
-        print(" "*19 + "PAINEL DE TELEMETRIA: ÚLTIMA MEDIÇÃO POR SENSOR")
-        print("="*80)
+        print("\n" + "=" * 80)
+        print(" " * 19 + "PAINEL DE TELEMETRIA: ÚLTIMA MEDIÇÃO POR SENSOR")
+        print("=" * 80)
 
+        # Caso não existam sensores cadastrados, informa o usuário.
         if not resultados:
             print("Nenhum sensor cadastrado no sistema.")
         else:
+            # Exibe cada sensor junto com sua última leitura, quando existir.
             for registro in resultados:
                 nro_serie, nome, tipo_medicao, data_hora, valor = registro
-                
+
                 print(f"SENSOR: {nome} | Nº Série: {nro_serie}")
                 print(f"  Tipo de Medição: {tipo_medicao}")
-                
+
                 if data_hora:
                     print(f"  Última Leitura : {valor} | Coletado em: {data_hora}")
                 else:
-                    print(f"  Última Leitura : [SEM HISTÓRICO] Nenhuma medição registrada para este sensor.")
+                    print(
+                        "  Última Leitura : [SEM HISTÓRICO] "
+                        "Nenhuma medição registrada para este sensor."
+                    )
                 print("-" * 80)
-                
-        print("="*80)
 
-    except Exception as e:
-        print(f"Erro ao consultar a telemetria dos sensores: {e}")
+        print("=" * 80)
+
+    except Exception as erro:
+        # Em caso de erro, exibe uma mensagem amigável sem encerrar o programa.
+        print("Erro ao consultar a telemetria dos sensores.")
+        print(erro)
+
     finally:
-        cursor.close()
-        conexao.close()
+        # Fecha o cursor, se ele tiver sido criado.
+        if cursor:
+            cursor.close()
+
+        # Fecha a conexão com o banco, se ela tiver sido aberta.
+        if conexao:
+            conexao.close()
 
 
 def nota_fiscal():
     """
-    Consulta 3 no consultas.sql
+    Gera um relatório de notas fiscais a partir das transações registradas.
+
+    A função executa a Consulta 3 do arquivo consultas.sql. O objetivo é reunir,
+    em uma única visualização, dados do consumidor, da transação, do produto comprado
+    e da origem produtiva associada à colheita que gerou o produto.
+
+    A consulta realiza junções entre transação, consumidor, produto, colheita e
+    operação. Dessa forma, permite exibir informações comerciais e dados de
+    rastreabilidade, como propriedade, localização e talhão de origem.
     """
-    conexao = conectar()
-    cursor = conexao.cursor()
+
+    # Inicialização das variáveis de conexão e cursor.
+    conexao = None
+    cursor = None
 
     try:
+        # Abre conexão com o banco de dados.
+        conexao = conectar()
+
+        # Cria o cursor usado para executar comandos SQL.
+        cursor = conexao.cursor()
+
+        # Executa a consulta de emissão de notas fiscais.
+        # Os JOINs conectam a compra ao consumidor, ao produto e à operação de origem.
         cursor.execute(
             """
-        SELECT
-            tr.id_operacao                           AS id_nota,
-            TO_CHAR(tr.data_compra, 'DD/MM/YYYY HH24:MI') AS data_compra,
-            c.cnpj                                   AS cnpj_consumidor,
-            c.nome                                   AS nome_consumidor,
-            c.email1                                 AS email_consumidor,
-            c.telefone1                              AS telefone_consumidor,
-            p.lote_produto,
-            p.preco                                  AS preco_unitario,
-            tr.quantidade_comprada,
-            tr.valor_compra                          AS valor_total,
-            o.propriedade_nome,
-            o.propriedade_localizacao,
-            o.nro_talhao
-        FROM transacao tr
-        JOIN consumidor c
-        ON c.cnpj = tr.cnpj_consumidor
-        JOIN produto p
-        ON p.id_operacao = tr.id_operacao
-        AND p.lote_produto = tr.lote_produto
-        JOIN colheita co
-        ON co.id_operacao = p.id_operacao
-        JOIN operacao o
-        ON o.id_operacao = co.id_operacao
-        ORDER BY tr.data_compra DESC, c.nome;
-        """)
+            SELECT
+                tr.id_operacao AS id_nota,
+                TO_CHAR(tr.data_compra, 'DD/MM/YYYY HH24:MI') AS data_compra,
+                c.cnpj AS cnpj_consumidor,
+                c.nome AS nome_consumidor,
+                c.email1 AS email_consumidor,
+                c.telefone1 AS telefone_consumidor,
+                p.lote_produto,
+                p.preco AS preco_unitario,
+                tr.quantidade_comprada,
+                tr.valor_compra AS valor_total,
+                o.propriedade_nome,
+                o.propriedade_localizacao,
+                o.nro_talhao
+            FROM transacao tr
+            JOIN consumidor c
+              ON c.cnpj = tr.cnpj_consumidor
+            JOIN produto p
+              ON p.id_operacao = tr.id_operacao
+             AND p.lote_produto = tr.lote_produto
+            JOIN colheita co
+              ON co.id_operacao = p.id_operacao
+            JOIN operacao o
+              ON o.id_operacao = co.id_operacao
+            ORDER BY tr.data_compra DESC, c.nome;
+            """
+        )
 
+        # Recupera todos os resultados retornados pela consulta.
         notas_fiscais = cursor.fetchall()
 
+        # Caso não existam transações, informa o usuário.
         if not notas_fiscais:
             print("Nenhuma transação encontrada para gerar notas fiscais.")
             return
 
-        print("\n" + "="*50)
-        print(" "*13 + "EMISSÃO DE NOTAS FISCAIS")
-        print("="*50)
+        print("\n" + "=" * 50)
+        print(" " * 13 + "EMISSÃO DE NOTAS FISCAIS")
+        print("=" * 50)
 
+        # Exibe cada transação em formato semelhante a uma nota fiscal.
         for nota in notas_fiscais:
-            (id_nota, data_compra, cnpj, nome, email, telefone, 
-            lote, preco, qtd, valor_total, prop_nome, prop_loc, nro_talhao) = nota
-                
-            # Imprime a nota fiscal
+            (
+                id_nota,
+                data_compra,
+                cnpj,
+                nome,
+                email,
+                telefone,
+                lote,
+                preco,
+                qtd,
+                valor_total,
+                prop_nome,
+                prop_loc,
+                nro_talhao,
+            ) = nota
+
             print(f"NOTA FISCAL Nº: {id_nota} | Emissão: {data_compra}")
             print(f"CONSUMIDOR: {nome}")
             print(f"CNPJ: {cnpj} | Contato: {email} / {telefone}")
-            print(f"--------------------------------------------------")
+            print("--------------------------------------------------")
             print(f"PRODUTO (Lote): {lote}")
             print(f"ORIGEM RASTREADA: {prop_nome} - {prop_loc} (Talhão {nro_talhao})")
             print(f"QUANTIDADE: {qtd} kg  x  PREÇO UNIT: R$ {preco}")
             print(f"VALOR TOTAL DA NOTA: R$ {valor_total}")
-            print("="*50)
+            print("=" * 50)
 
-    except Exception as e:
-        print(f"Erro ao emitir as notas fiscais: {e}")
+    except Exception as erro:
+        # Em caso de erro, exibe uma mensagem amigável sem encerrar o programa.
+        print("Erro ao emitir as notas fiscais.")
+        print(erro)
+
     finally:
-        cursor.close()
-        conexao.close()
+        # Fecha o cursor, se ele tiver sido criado.
+        if cursor:
+            cursor.close()
+
+        # Fecha a conexão com o banco, se ela tiver sido aberta.
+        if conexao:
+            conexao.close()
 
 
 def operacoes_acima_da_media():
     """
-    Consulta 4 no consultas.sql
+    Lista operações concluídas cuja duração ficou acima da média global.
+
+    A função executa a Consulta 4 do arquivo consultas.sql. O objetivo é auxiliar
+    a análise de eficiência operacional, identificando operações agrícolas que levaram
+    mais tempo do que a duração média das operações concluídas no sistema.
+
+    A consulta calcula a duração de cada operação em horas e usa uma subconsulta
+    não correlacionada para obter a média global de duração. Em seguida, retorna
+    apenas as operações com duração superior a essa média.
     """
-    conexao = conectar()
-    cursor = conexao.cursor()
+
+    # Inicialização das variáveis de conexão e cursor.
+    conexao = None
+    cursor = None
 
     try:
+        # Abre conexão com o banco de dados.
+        conexao = conectar()
+
+        # Cria o cursor usado para executar comandos SQL.
+        cursor = conexao.cursor()
+
+        # Executa a consulta de operações acima da média.
+        # A subconsulta calcula a duração média das operações concluídas.
         cursor.execute(
             """
             SELECT
@@ -403,42 +537,81 @@ def operacoes_acima_da_media():
             """
         )
 
+        # Recupera todos os resultados retornados pela consulta.
         resultados = cursor.fetchall()
 
-        print("\n" + "="*85)
-        print(" "*18 + "RELATÓRIO DE EFICIÊNCIA: OPERAÇÕES ACIMA DA MÉDIA GLOBAL")
-        print("="*85)
+        print("\n" + "=" * 85)
+        print(" " * 18 + "RELATÓRIO DE EFICIÊNCIA: OPERAÇÕES ACIMA DA MÉDIA GLOBAL")
+        print("=" * 85)
 
+        # Caso nenhuma operação satisfaça o critério, informa o usuário.
         if not resultados:
-            print("Nenhuma operação concluída ficou acima da média")
+            print("Nenhuma operação concluída ficou acima da média.")
         else:
+            # Exibe as operações ordenadas pela duração, da maior para a menor.
             for registro in resultados:
-                (id_op, inicio, fim, operador, maquina, 
-                 propriedade, localizacao, talhao, duracao) = registro
-                
+                (
+                    id_op,
+                    inicio,
+                    fim,
+                    operador,
+                    maquina,
+                    propriedade,
+                    localizacao,
+                    talhao,
+                    duracao,
+                ) = registro
+
                 print(f"OPERAÇÃO Nº: {id_op} | DURAÇÃO: {duracao} horas")
                 print(f"  Período : De {inicio} até {fim}")
                 print(f"  Local   : {propriedade} ({localizacao}) - Talhão {talhao}")
                 print(f"  Recursos: Operador: {operador} | Equipamento: {maquina}")
                 print("-" * 85)
-                
-        print("="*85)
 
-    except Exception as e:
-        print(f"Erro ao analisar as operações: {e}")
+        print("=" * 85)
+
+    except Exception as erro:
+        # Em caso de erro, exibe uma mensagem amigável sem encerrar o programa.
+        print("Erro ao analisar as operações.")
+        print(erro)
+
     finally:
-        cursor.close()
-        conexao.close()
+        # Fecha o cursor, se ele tiver sido criado.
+        if cursor:
+            cursor.close()
+
+        # Fecha a conexão com o banco, se ela tiver sido aberta.
+        if conexao:
+            conexao.close()
 
 
 def todos_graos():
     """
-    Consulta 5 no consultas.sql
+    Lista fornecedores que vendem todos os tipos de grãos cadastrados no sistema.
+
+    A função executa a Consulta 5 do arquivo consultas.sql, que implementa uma
+    divisão relacional por meio de duas subconsultas NOT EXISTS encadeadas.
+
+    A lógica da consulta é: retornar fornecedores para os quais não existe nenhum
+    grão cadastrado que não esteja presente em algum lote vendido por esse fornecedor.
+    Em outras palavras, o fornecedor é listado apenas se vender todos os grãos do
+    catálogo do sistema.
     """
-    conexao = conectar()
-    cursor = conexao.cursor()
+
+    # Inicialização das variáveis de conexão e cursor.
+    conexao = None
+    cursor = None
 
     try:
+        # Abre conexão com o banco de dados.
+        conexao = conectar()
+
+        # Cria o cursor usado para executar comandos SQL.
+        cursor = conexao.cursor()
+
+        # Executa a consulta de divisão relacional.
+        # O primeiro NOT EXISTS garante que não exista grão sem lote correspondente
+        # vendido pelo fornecedor avaliado.
         cursor.execute(
             """
             SELECT f.cnpj, f.nome
@@ -457,25 +630,36 @@ def todos_graos():
             """
         )
 
+        # Recupera todos os resultados retornados pela consulta.
         resultados = cursor.fetchall()
 
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print(" FORNECEDORES QUE VENDEM TODOS OS GRÃOS DO SISTEMA")
-        print("="*60)
+        print("=" * 60)
 
+        # Caso nenhum fornecedor satisfaça a divisão relacional, informa o usuário.
         if not resultados:
             print("Nenhum fornecedor vende todos os tipos de grãos atualmente.")
         else:
-            for cnpj, nome in resultados:               
+            # Exibe os fornecedores encontrados.
+            for cnpj, nome in resultados:
                 print(f"Fornecedor: {nome} | CNPJ: {cnpj}")
-        
-        print("="*60)
 
-    except Exception as e:
-        print(f"Erro ao executar a consulta: {e}")
+        print("=" * 60)
+
+    except Exception as erro:
+        # Em caso de erro, exibe uma mensagem amigável sem encerrar o programa.
+        print("Erro ao executar a consulta de fornecedores.")
+        print(erro)
+
     finally:
-        cursor.close()
-        conexao.close()
+        # Fecha o cursor, se ele tiver sido criado.
+        if cursor:
+            cursor.close()
+
+        # Fecha a conexão com o banco, se ela tiver sido aberta.
+        if conexao:
+            conexao.close()
 
 
 def cadastrar_propriedade():
@@ -578,48 +762,100 @@ def cadastrar_propriedade():
 
 
 def consultar_por_area():
-    # usa try/except para tratar erros e não deixar SQLinjection
+    """
+    Consulta propriedades rurais com área total maior ou igual a um valor informado.
+
+    A função solicita ao usuário uma área mínima e valida se o valor digitado pode
+    ser convertido para número. Em seguida, executa uma consulta parametrizada sobre
+    a tabela propriedade, retornando nome, localização e área total das propriedades
+    que atendem ao critério informado.
+
+    O uso de parâmetros no cursor.execute() evita a concatenação direta da entrada
+    do usuário no comando SQL, reduzindo o risco de SQL Injection.
+    """
+
+    print("\n=== Consulta de propriedades por área mínima ===")
+
+    # Entrada de dados do usuário.
+    area_texto = input("Área mínima: ").strip()
+
+    # Conversão da área mínima para número decimal.
+    # O try/except trata entradas inválidas, como texto no lugar de número.
     try:
-        area_minima = float(input("Área mínima: "))
+        area_minima = float(area_texto)
     except ValueError:
         print("Área inválida. Digite um número.")
         return
 
-    # conecta ao banco
-    conexao = conectar()
-    cursor = conexao.cursor()
+    # Validação simples para evitar consultas com área negativa.
+    if area_minima < 0:
+        print("Área inválida. Digite um valor maior ou igual a zero.")
+        return
 
-    # ao não usar f-strings já se protege de SQL injection
-    # seleciona nome, localização e área total com um WHERE restrição
-    cursor.execute(
-        """
-        SELECT nome, localizacao, area_total
-        FROM propriedade
-        WHERE area_total >= %s
-        ORDER BY area_total DESC;
-    """,
-        (area_minima,),
-    )
+    # Inicialização das variáveis de conexão e cursor.
+    conexao = None
+    cursor = None
 
-    # transforma em uma lista para conseguirmos mostrar
-    resultados = cursor.fetchall()
+    try:
+        # Abre conexão com o banco de dados.
+        conexao = conectar()
 
-    print(f"\n=== Propriedades com área >= {area_minima} ===")
+        # Cria o cursor usado para executar comandos SQL.
+        cursor = conexao.cursor()
 
-    if not resultados:
-        print("Nenhuma propriedade encontrada.")
-    else:
-        for nome, localizacao, area_total in resultados:
-            print(f"{nome} | {localizacao} | {area_total} ha")
+        # Executa a consulta usando parâmetro (%s).
+        # Isso evita SQL Injection porque o valor informado pelo usuário é tratado
+        # como dado, e não como parte do comando SQL.
+        cursor.execute(
+            """
+            SELECT nome, localizacao, area_total
+            FROM propriedade
+            WHERE area_total >= %s
+            ORDER BY area_total DESC;
+        """,
+            (area_minima,),
+        )
 
-    # fecha o banco de dados
-    cursor.close()
-    conexao.close()
+        # Recupera todos os resultados retornados pela consulta.
+        resultados = cursor.fetchall()
+
+        print(f"\n=== Propriedades com área >= {area_minima} ===")
+
+        # Caso nenhuma propriedade seja encontrada, informa o usuário.
+        if not resultados:
+            print("Nenhuma propriedade encontrada.")
+        else:
+            # Exibe as propriedades encontradas em formato resumido.
+            for nome, localizacao, area_total in resultados:
+                print(f"{nome} | {localizacao} | {area_total} ha")
+
+    except Exception as erro:
+        # Em caso de erro, exibe uma mensagem amigável sem encerrar o programa.
+        print("Erro ao consultar propriedades por área.")
+        print(erro)
+
+    finally:
+        # Fecha o cursor, se ele tiver sido criado.
+        if cursor:
+            cursor.close()
+
+        # Fecha a conexão com o banco, se ela tiver sido aberta.
+        if conexao:
+            conexao.close()
 
 
 def menu():
+    """
+    Exibe o menu principal da aplicação AgroTrace Mini.
+
+    A função mantém um laço de repetição que apresenta as opções disponíveis ao
+    usuário e chama a função correspondente à opção escolhida. O menu é voltado ao
+    uso em linha de comando e permite demonstrar funcionalidades de cadastro e
+    consulta conectadas ao banco de dados.
+    """
+
     while True:
-        # menu simples
+        # Exibe as opções disponíveis para o usuário final.
         print("\n=== AgroTrace Mini ===")
         print("1 - Cadastrar propriedade")
         print("2 - Consultar por área mínima")
@@ -631,8 +867,10 @@ def menu():
         print("8 - Listar última medição de cada sensor")
         print("9 - Sair")
 
+        # Lê a opção escolhida pelo usuário.
         opcao = input("Escolha uma opção: ")
 
+        # Direciona a execução para a funcionalidade correspondente.
         if opcao == "1":
             cadastrar_propriedade()
         elif opcao == "2":
