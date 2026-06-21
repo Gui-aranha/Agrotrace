@@ -4,15 +4,6 @@
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
--- CONSULTA 0: Listagem de todas as propriedades
--- Justificativa: Lista todas as propriedades por nome e localização, serve para a
--- visualização simples das propriedades cadastradas, sem querer ver todas as
--- informações de cada uma
--- ------------------------------------------------------------------------------
-SELECT nome, localizacao
-FROM propriedade
-ORDER BY nome;
--- ------------------------------------------------------------------------------
 -- CONSULTA 1: Relatório detalhado das propriedades
 -- Justificativa: Fornece uma visão geral combinando o tamanho da propriedade, 
 -- quantidade de talhões, todos os tipos de grãos já plantados e insumos químicos 
