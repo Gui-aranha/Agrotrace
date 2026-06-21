@@ -1,6 +1,4 @@
-# AgroTrace
-
-Protótipo simplificado do sistema AgroTrace para a disciplina de Bases de Dados.
+# AgroTrace 5.0
 
 ## Requisitos
 
